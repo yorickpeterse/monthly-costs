@@ -1,0 +1,169 @@
+import std.csv (Error as CsvError, Parser)
+import std.env (arguments)
+import std.fs.file (ReadOnlyFile)
+import std.fs.path (Path)
+import std.io (Read)
+import std.json (PullParser)
+import std.optparse (Help, Options)
+import std.stdio (STDERR, STDOUT)
+import std.string (ToString)
+import std.sys (exit)
+
+fn error(message: String) -> Never {
+  let out = STDERR.new
+
+  out.print('error: ${message}')
+  out.flush
+  exit(1)
+}
+
+fn show_help(options: ref Options) -> Never {
+  let help = Help
+    .new('wtml [CSV FILE]')
+    .description(
+      'Provides an overview of monthly costs based on an ING CSV file.',
+    )
+    .section('Options')
+    .options(options)
+    .to_string
+
+  STDOUT.new.write_string(help)
+  exit(0)
+}
+
+# TODO: move into dedicated type
+fn parse_mapping(path: Path) -> Result[Map[String, String], String] {
+  let bytes = ByteArray.new
+
+  match ReadOnlyFile.new(path.clone).then(fn (f) { f.read_all(bytes) }) {
+    case Ok(_) -> {}
+    case Error(NotFound) -> return Result.Ok(Map.new)
+    case Error(e) -> throw 'failed to read ${path}: ${e}'
+  }
+
+  let parser = PullParser.new(bytes)
+  let map = Map.new
+
+  parser.keys(fn (key) {
+    map.set(key, try parser.string)
+    Result.Ok(nil)
+  })
+
+  Result.Ok(map)
+}
+
+class Transaction {
+  # The description of the transaction.
+  let @description: String
+
+  # The amount (in Euros) of the transaction.
+  let @amount: Float
+
+  # TODO: tests
+  fn static parse[T: mut + Read](
+    parser: mut Parser[T],
+  ) -> Result[Option[Transaction], Error] {
+    # date
+    try parser.skip_column.map_error(fn (e) { Error.InvalidSyntax(e) })
+
+    let desc = try parser.column.map_error(fn (e) { Error.InvalidSyntax(e) })
+
+    # account, counter party, code
+    try parser.skip_columns(3).map_error(fn (e) { Error.InvalidSyntax(e) })
+
+    let kind = try parser.column.map_error(fn (e) { Error.InvalidSyntax(e) })
+    let amount_start = parser.offset
+    let amount = try parser.column.map_error(fn (e) { Error.InvalidSyntax(e) })
+
+    # transaction type, notifications
+    try parser.skip_columns(2).map_error(fn (e) { Error.InvalidSyntax(e) })
+
+    if kind != 'Debit' { return Result.Ok(Option.None) }
+
+    match Float.parse(amount.replace(',', '.')) {
+      case Some(v) -> {
+        Result.Ok(Option.Some(Transaction(description: desc, amount: v)))
+      }
+      case _ -> Result.Error(Error.InvalidAmount(amount_start))
+    }
+  }
+}
+
+class enum Error {
+  case InvalidSyntax(CsvError)
+  case InvalidAmount(Int)
+}
+
+impl ToString for Error {
+  fn pub to_string -> String {
+    match self {
+      case InvalidSyntax(e) -> e.to_string
+      case InvalidAmount(i) -> 'the amount at byte offset ${i} is invalid'
+    }
+  }
+}
+
+class async Main {
+  fn async main {
+    let opts = Options.new
+
+    opts.flag('h', 'help', 'Show this help message')
+    opts.flag('c', 'config', 'The configuration file to use')
+
+    let matches = match opts.parse(arguments) {
+      case Ok(v) -> v
+      case Error(e) -> error(e.to_string)
+    }
+
+    if matches.contains?('help') or matches.remaining.empty? { show_help(opts) }
+
+    let mapping = match
+      parse_mapping(matches.value('config').or('config.json').to_path)
+    {
+      case Ok(v) -> v
+      case Error(e) -> error(e)
+    }
+    let path = matches.remaining.get(0).to_path
+    let parser = match ReadOnlyFile.new(path.clone) {
+      case Ok(v) -> Parser.new(v)
+      case Error(e) -> error('failed to open ${path}: ${e}')
+    }
+
+    # Skip the first line containing the headers.
+    match parser.skip_line {
+      case Ok(_) -> {}
+      case Error(e) -> error(e.to_string)
+    }
+
+    let amounts = Map.new
+
+    loop {
+      match Transaction.parse(parser) {
+        case Ok(Some({ @description = desc, @amount = amount })) -> {
+          let key = mapping.opt(desc).or(desc)
+          let cur = amounts.opt(key).or(0.0)
+
+          amounts.set(key, cur + amount)
+        }
+        case Ok(None) -> {}
+        case Error(e) -> error(e.to_string)
+      }
+
+      match parser.next_line {
+        case Ok(true) -> {}
+        case Ok(false) -> break
+        case Error(e) -> error(e.to_string)
+      }
+    }
+
+    let pairs = amounts.into_iter.to_array
+    let out = STDOUT.new
+
+    pairs.sort_by(fn (a, b) { b.value.cmp(a.value) })
+    pairs.into_iter.each(fn (kv) {
+      let val = kv.value.round(2).to_string.replace('.', ',')
+
+      out.print('${kv.key}\t${val}')
+    })
+  }
+}
