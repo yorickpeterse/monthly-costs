@@ -63,20 +63,21 @@ class Transaction {
   fn static parse[T: mut + Read](
     parser: mut Parser[T],
   ) -> Result[Option[Transaction], Error] {
-    # date
-    try parser.skip_column.map_error(fn (e) { Error.InvalidSyntax(e) })
-
-    let desc = try parser.column.map_error(fn (e) { Error.InvalidSyntax(e) })
-
-    # account, counter party, code
-    try parser.skip_columns(3).map_error(fn (e) { Error.InvalidSyntax(e) })
-
-    let kind = try parser.column.map_error(fn (e) { Error.InvalidSyntax(e) })
+    let desc = try parser.skip_column.then(fn (_) { parser.column }).map_error(
+      fn (e) { Error.InvalidSyntax(e) },
+    )
+    let kind = try parser
+      .skip_columns(3)
+      .then(fn (_) { parser.column })
+      .map_error(fn (e) { Error.InvalidSyntax(e) })
     let amount_start = parser.offset
-    let amount = try parser.column.map_error(fn (e) { Error.InvalidSyntax(e) })
-
-    # transaction type, notifications
-    try parser.skip_columns(2).map_error(fn (e) { Error.InvalidSyntax(e) })
+    let amount = try parser
+      .column
+      .then(fn (v) {
+        try parser.skip_columns(2)
+        Result.Ok(v)
+      })
+      .map_error(fn (e) { Error.InvalidSyntax(e) })
 
     if kind != 'Debit' { return Result.Ok(Option.None) }
 
