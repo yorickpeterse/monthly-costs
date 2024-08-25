@@ -1,0 +1,32 @@
+import std.test (Tests)
+import wtml.config (Config)
+
+fn pub tests(t: mut Tests) {
+  t.ok('Config.load with a valid configuration file', fn (t) {
+    let path = 'fixtures/config/config.json'.to_path
+    let conf = try Config.load(path)
+
+    t.equal(conf.mapping.opt('original name'), Option.Some('new name'))
+    Result.Ok(nil)
+  })
+
+  t.test('Config.load with an invalid configuration file', fn (t) {
+    let path = 'fixtures/config/invalid.json'.to_path
+
+    t.true(Config.load(path).error?)
+  })
+
+  t.ok('Config.default with an existing configuration file', fn (t) {
+    let conf = try Config.default('fixtures/config'.to_path)
+
+    t.equal(conf.mapping.opt('original name'), Option.Some('new name'))
+    Result.Ok(nil)
+  })
+
+  t.ok('Config.default without an existing configuration file', fn (t) {
+    let conf = try Config.default('fixtures'.to_path)
+
+    t.equal(conf.mapping.size, 0)
+    Result.Ok(nil)
+  })
+}

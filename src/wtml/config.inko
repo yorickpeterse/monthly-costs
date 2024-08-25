@@ -1,0 +1,38 @@
+import std.fs.file (ReadOnlyFile)
+import std.fs.path (Path)
+import std.io (Error)
+import std.json (PullParser)
+
+class Config {
+  let @mapping: Map[String, String]
+
+  fn static load(path: Path) -> Result[Config, String] {
+    let bytes = ByteArray.new
+    let conf = Config.new
+
+    try ReadOnlyFile.new(path).then(fn (f) { f.read_all(bytes) }).map_error(
+      fn (e) { e.to_string },
+    )
+
+    let parser = PullParser.new(bytes)
+
+    try parser
+      .keys(fn (key) {
+        conf.mapping.set(key, try parser.string)
+        Result.Ok(nil)
+      })
+      .map_error(fn (e) { e.to_string })
+
+    Result.Ok(conf)
+  }
+
+  fn static default(directory: ref Path) -> Result[Config, String] {
+    let path = directory.join('config.json')
+
+    if path.file? { Config.load(path) } else { Result.Ok(Config.new) }
+  }
+
+  fn static new -> Config {
+    Config(mapping: Map.new)
+  }
+}

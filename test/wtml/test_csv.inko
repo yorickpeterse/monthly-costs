@@ -1,0 +1,31 @@
+import std.test (Tests)
+import wtml.config (Config)
+import wtml.csv (parse)
+
+fn pub tests(t: mut Tests) {
+  t.test('parse() with a valid CSV', fn (t) {
+    let path = 'fixtures/csv/valid.csv'.to_path
+    let conf = Config.new
+
+    t.equal(
+      parse(path, conf),
+      Result.Ok([('Example 2', 2.4), ('Example 1', 1.4)]),
+    )
+  })
+
+  t.test('parse() with a valid CSV and custom mapping', fn (t) {
+    let path = 'fixtures/csv/valid.csv'.to_path
+    let conf = Config.new
+
+    conf.mapping.set('Example 1', 'kittens')
+
+    t.equal(
+      parse(path, conf),
+      Result.Ok([('Example 2', 2.4), ('kittens', 1.4)]),
+    )
+  })
+
+  t.test('parse() with an invalid CSV', fn (t) {
+    t.true(parse('fixtures/csv/invalid.csv'.to_path, Config.new).error?)
+  })
+}
