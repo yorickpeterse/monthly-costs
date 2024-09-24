@@ -1,4 +1,4 @@
-import std.csv (Error as CsvError, Parser)
+import std.csv (Parser)
 import std.fs.file (ReadOnlyFile)
 import std.fs.path (Path)
 import std.io (Read)

@@ -1,6 +1,5 @@
 import std.fs.file (ReadOnlyFile)
 import std.fs.path (Path)
-import std.io (Error)
 import std.json (PullParser)
 
 class Config {
