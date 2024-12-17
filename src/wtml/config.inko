@@ -6,17 +6,12 @@ class Config {
   let @mapping: Map[String, String]
 
   fn static load(path: Path) -> Result[Config, String] {
-    let bytes = ByteArray.new
     let conf = Config.new
-
-    try ReadOnlyFile.new(path).then(fn (f) { f.read_all(bytes) }).map_error(
-      fn (e) { e.to_string },
-    )
-
-    let parser = PullParser.new(bytes)
+    let file = try ReadOnlyFile.new(path).map_error(fn (e) { e.to_string })
+    let parser = PullParser.new(file)
 
     try parser
-      .keys(fn (key) {
+      .keys(fn (_pos, key) {
         conf.mapping.set(key, try parser.string)
         Result.Ok(nil)
       })

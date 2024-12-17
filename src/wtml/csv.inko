@@ -42,7 +42,7 @@ fn parse(
   Result.Ok(pairs)
 }
 
-class Transaction {
+class inline Transaction {
   let @description: String
   let @amount: Float
 
