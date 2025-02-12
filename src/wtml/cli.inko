@@ -4,7 +4,7 @@ import std.optparse (Help, Options)
 import wtml.config (Config)
 import wtml.csv (parse)
 
-fn show_help(options: ref Options, output: mut Write) {
+fn show_help[T: mut + Write](options: ref Options, output: mut T) {
   let help = Help
     .new('wtml [CSV FILE]')
     .description(
@@ -17,10 +17,10 @@ fn show_help(options: ref Options, output: mut Write) {
   let _ = output.write_string(help)
 }
 
-fn pub run(
+fn pub run[T: mut + Write](
   arguments: Array[String],
   working_directory: Path,
-  output: mut Write,
+  output: mut T,
 ) -> Result[Nil, String] {
   let opts = Options.new
 

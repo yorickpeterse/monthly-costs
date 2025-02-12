@@ -2,7 +2,7 @@ import std.fs.file (ReadOnlyFile)
 import std.fs.path (Path)
 import std.json (PullParser)
 
-class Config {
+type Config {
   let @mapping: Map[String, String]
 
   fn static load(path: Path) -> Result[Config, String] {
